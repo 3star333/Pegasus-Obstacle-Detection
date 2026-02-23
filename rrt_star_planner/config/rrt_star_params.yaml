@@ -1,0 +1,23 @@
+rrt_star_planner:
+  ros__parameters:
+    # RRT* algorithm parameters
+    max_iterations: 2000          # Maximum planning iterations
+    step_size: 5.0                # Step size for tree extension (meters)
+    goal_tolerance: 3.0           # Goal acceptance radius (meters)
+    search_radius: 15.0           # RRT* rewiring radius (meters)
+    planning_horizon: 100.0       # Look-ahead planning distance (meters)
+    
+    # Kinodynamic constraints for 15ft wingspan UAV
+    min_turn_radius: 20.0         # Minimum turn radius (meters) - fixed-wing constraint
+    obstacle_clearance: 3.0       # Safety margin around obstacles (meters)
+    max_climb_angle: 20.0         # Maximum climb angle (degrees)
+    
+    # Performance settings
+    replan_rate: 1.0              # Replanning frequency (Hz) - fixed-wing doesn't need high rate
+    
+    # Notes for tuning:
+    # - Increase max_iterations for complex environments (up to 5000)
+    # - Reduce step_size for tighter spaces (down to 3.0m)
+    # - Increase search_radius for better path optimization (up to 25.0m)
+    # - Adjust min_turn_radius based on flight speed and maneuverability
+    # - Increase obstacle_clearance in cluttered environments (up to 5.0m)

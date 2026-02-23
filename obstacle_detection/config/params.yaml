@@ -1,0 +1,19 @@
+obstacle_detector:
+  ros__parameters:
+    # Detection parameters - Configured for 15ft wingspan UAV
+    danger_distance: 80.0     # Distance threshold for obstacle warning (meters)
+    detection_width: 9.0      # Horizontal detection width ±Y (meters) - accounts for 15ft wingspan
+    detection_height: 6.0     # Vertical detection height ±Z (meters)
+    min_distance: 2.0         # Minimum distance threshold - ignore closer points (meters)
+    obstacle_inflation: 3.0   # Safety margin around obstacles (meters) - 2× wing radius
+    
+    # Topic configuration
+    lidar_topic: "/lidar/points"
+    
+    # Performance
+    update_rate: 10.0         # Processing update rate (Hz)
+    
+    # UAV specifications (15ft wingspan, 14.5ft length, 4ft height)
+    # - Danger distance: 80m provides reaction time for fixed-wing/VTOL
+    # - Detection width: 9m (15ft wingspan = 4.6m + 3m safety margin per side)
+    # - Obstacle inflation: 3m minimum clearance for wing tips and structural safety

@@ -1,0 +1,2 @@
+# Python dependencies for obstacle detection
+numpy>=1.21.0
