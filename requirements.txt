@@ -1,2 +1,15 @@
-# Python dependencies for obstacle detection
+# Python dependencies for the Pegasus obstacle avoidance stack
+# Install with: pip install -r requirements.txt
+
+# Core numerics
 numpy>=1.21.0
+
+# Optional: accelerated DBSCAN clustering (falls back to built-in if unavailable)
+# scikit-learn>=1.0.0
+
+# Optional: YOLO object detection (camera-based obstacle detection)
+# ultralytics>=8.0.0      # YOLOv8  (pip install ultralytics)
+# opencv-python>=4.5.0    # camera frame pre-processing
+
+# Optional: RViz/rviz2 marker helpers (visualization only)
+# transforms3d>=0.3.1
