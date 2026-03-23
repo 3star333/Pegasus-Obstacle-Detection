@@ -1,6 +1,13 @@
-# PX4 ROS 2 Obstacle Detection & Path Planning
+# PX4 ROS 2 Obstacle Detection & A* Path Planning
 
-A modular ROS 2 package for real-time LiDAR-based obstacle detection and RRT* path planning designed for large fixed-wing/VTOL UAVs (15ft wingspan). This implementation is simulation-tested and hardware-ready.
+> ⚠️ **Branch: `ros-workspace-branch`** — This branch integrates the A* pathfinding
+> algorithm from [Pegasus-Disaster-Response/Ros-workspace](https://github.com/Pegasus-Disaster-Response/Ros-workspace)
+> (commit c752b073, March 4 2026), replacing the previous RRT* planner.  All obstacle
+> detection, Kalman tracking, and zone-based avoidance capabilities are fully preserved.
+>
+> The RRT* planner code is archived at [`deprecated/rrt_star_planner/`](deprecated/rrt_star_planner/).
+
+A modular ROS 2 package for real-time LiDAR-based obstacle detection and **A\* path planning** designed for large fixed-wing/VTOL UAVs (15ft wingspan). This implementation is simulation-tested and hardware-ready.
 
 ##  Mission Goal
 
@@ -8,20 +15,30 @@ A modular ROS 2 package for real-time LiDAR-based obstacle detection and RRT* pa
 
 ##  Architecture Overview
 
-### **RRT* with Kinodynamic Constraints** (Recommended)
+### **A\* Global Planner + Zone-Based Avoidance** (Current)
 
-Based on trade study analysis, this architecture provides optimal balance for 15ft wingspan UAVs:
+The system now uses weighted A\* (sourced from Pegasus-Disaster-Response/Ros-workspace)
+for global path planning, combined with the existing Kalman-tracking zone-based avoidance
+for local reactive control.
 
 **Key Benefits:**
--  **Resource Usage: 30-40% CPU/Memory** (vs 50-75% for hybrid approach)
--  **Respects turn radius & flight dynamics** (critical for large aircraft)
--  **Planning horizon: 100m** (appropriate for forward flight speeds)
--  **Smooth, flyable trajectories** (not aggressive zigzags)
--  **Handles 3m obstacle inflation** (accounts for 15ft wingspan + safety)
+-  **Deterministic** — same inputs always produce the same path
+-  **Optimal paths** (w=1.0) or configurable speed/quality trade-off (w>1.0)
+-  **Direct costmap integration** — reads `nav_msgs/OccupancyGrid` natively
+-  **Fast** — 10–100 ms for typical environments (vs 100–300 ms for RRT*)
+-  **Preserves all obstacle detection** — Kalman tracking and zone commands still active
 
-**Trade-offs:**
-- Path optimality: ~105% (slight overhead vs pure A*, but paths are flyable)
-- Planning latency: 100-300ms (acceptable for 1-2 Hz replanning)
+**System flow:**
+```
+LiDAR → obstacle_detector → /avoidance_command, /obstacle_velocity
+                          → /costmap/update_trigger → costmap_node → /costmap/grid
+                          → astar_planner           → /planned_path
+```
+
+### ~~RRT* with Kinodynamic Constraints~~ (Deprecated)
+
+The previous RRT* planner has been moved to `deprecated/rrt_star_planner/`.
+See [docs/ASTAR_INTEGRATION.md](docs/ASTAR_INTEGRATION.md) for the migration rationale.
 
 ##  Features
 
@@ -31,12 +48,13 @@ Based on trade study analysis, this architecture provides optimal balance for 15
 - Obstacle inflation radius for structural clearance (wing tips, props)
 - Configured for 15ft wingspan UAV with 80m danger distance
 
-### Path Planning (RRT*)
-- Kinodynamic constraints (turn radius, climb angle)
-- Collision-free path generation with 3m safety margin
-- Path smoothing and optimization
-- Anytime planning (can terminate early if needed)
-- 1-2 Hz replanning suitable for fixed-wing dynamics
+### Path Planning (A\*)
+- Weighted A\* on 2D OccupancyGrid (sourced from Pegasus-Disaster-Response/Ros-workspace)
+- 8-connected grid with diagonal movement
+- Configurable heuristic weight (1.0 = optimal, >1.0 = faster/greedy)
+- Costmap-driven obstacle avoidance with configurable lethal threshold
+- 2 Hz replanning, triggered by obstacle detection or path deviation
+- Compatible with all existing `/planned_path` consumers
 
 ##  Project Structure
 
@@ -53,23 +71,35 @@ peg/
 │   ├── package.xml
 │   ├── setup.py
 │   └── setup.cfg
-├── rrt_star_planner/            # Path planning ROS 2 package (separate team)
-│   ├── rrt_star_planner/
-│   │   └── rrt_star_planner.py  # RRT* kinodynamic planner
+├── astar_planner/               # A* path planner ROS 2 package (replaces RRT*)
+│   ├── astar_planner/
+│   │   ├── __init__.py
+│   │   ├── astar_node.py        # Main A* ROS 2 node
+│   │   ├── astar_algorithm.py   # Core A* implementation (from Ros-workspace)
+│   │   └── costmap_interface.py # OccupancyGrid → numpy bridge
 │   ├── config/
-│   │   └── rrt_star_params.yaml
+│   │   └── astar_params.yaml    # A* configuration
 │   ├── launch/
-│   │   └── rrt_star_planner.launch.py
+│   │   └── astar_planner.launch.py
 │   ├── package.xml
 │   ├── setup.py
 │   └── setup.cfg
+├── costmap/                     # Costmap ROS 2 package
+├── integrated_planning/         # Integrated planning module
+├── deprecated/
+│   ├── README.md                # Deprecation notice
+│   └── rrt_star_planner/        # Archived RRT* planner (no longer active)
+├── launch/
+│   └── full_system.launch.py    # Full stack launch file
+├── config/
+│   └── integrated_system.yaml   # Unified system configuration
 ├── context/
 │   └── Autonomy Trade Study.xlsx
 ├── docs/
-│   ├── ARCHITECTURE_DECISION.md
-│   ├── RRT_STAR_TUNING_GUIDE.md
-│   ├── CHECKLIST.md
-│   └── GETTING_STARTED.md
+│   ├── ASTAR_INTEGRATION.md     # A* integration guide (new)
+│   ├── RRT_star_tuning.md       # Historical RRT* tuning notes
+│   ├── architecture_information.md
+│   └── testing_guide.md
 ├── README.md
 └── requirements.txt
 ```
@@ -97,12 +127,7 @@ peg/
 3. **Build packages:**
    ```bash
    cd ~/ros2_ws
-   # Build obstacle detection only
-   colcon build --packages-select obstacle_detection
-   
-   # Build path planner separately (separate team)
-   colcon build --packages-select rrt_star_planner
-   
+   colcon build --packages-select obstacle_detection costmap astar_planner integrated_planning
    source install/setup.bash
    ```
 
@@ -114,17 +139,22 @@ peg/
    make px4_sitl gazebo-classic
    ```
 
-2. **Start the obstacle detector:**
+2. **Start the full stack (A* + obstacle detection):**
    ```bash
-   ros2 run obstacle_detection obstacle_detector
+   ros2 launch full_system.launch.py
+   ```
+
+   Or launch individual components:
+   ```bash
+   ros2 launch obstacle_detection detection.launch.py
+   ros2 launch costmap costmap.launch.py
+   ros2 launch astar_planner astar_planner.launch.py
    ```
 
 3. **Visualize in RViz2:**
    ```bash
    rviz2
    ```
-
-> **Note:** Path planning is handled by the separate `rrt_star_planner` package.
 
 ##  Configuration
 
@@ -151,30 +181,40 @@ obstacle_detector:
 
 ### Path Planning Parameters
 
-Edit [obstacle_detection/config/rrt_star_params.yaml](obstacle_detection/config/rrt_star_params.yaml) for RRT* planner:
+Edit [astar_planner/config/astar_params.yaml](astar_planner/config/astar_params.yaml) for A* planner:
 
 ```yaml
-rrt_star_planner:
+astar_planner:
   ros__parameters:
-    max_iterations: 2000       # Planning iterations
-    step_size: 5.0             # Tree extension step (meters)
-    goal_tolerance: 3.0        # Goal acceptance radius (meters)
-    search_radius: 15.0        # RRT* rewiring radius (meters)
-    planning_horizon: 100.0    # Look-ahead distance (meters)
-    min_turn_radius: 20.0      # Kinodynamic constraint (meters)
-    obstacle_clearance: 3.0    # Safety margin (meters)
-    max_climb_angle: 20.0      # Vertical constraint (degrees)
-    replan_rate: 1.0           # Replanning frequency (Hz)
+    grid_resolution: 0.5       # metres per cell
+    heuristic_weight: 1.0      # 1.0=optimal, >1.0=faster/greedy
+    max_iterations: 10000      # hard cap on node expansions
+    planning_frequency: 2.0    # Hz replanning rate
+    lethal_cost_threshold: 70  # cells >= this are impassable
+    cost_penalty_factor: 15.0  # penalty for traversing inflated cells
+    goal_tolerance_m: 3.0      # goal acceptance radius (metres)
+    safety_margin: 3.0         # minimum clearance (metres, 15ft wingspan)
+    min_altitude_m: 5.0
+    max_altitude_m: 120.0
 ```
 
 ##  Topics
 
-**Subscribed:**
+**Subscribed by obstacle_detector:**
 - `/lidar/points` (sensor_msgs/msg/PointCloud2) - LiDAR point cloud data
 
-**Published:**
+**Published by obstacle_detector:**
 - `/obstacle_detected` (std_msgs/msg/Bool) - True when obstacle within danger distance
-- `/obstacle_distance` (std_msgs/msg/Float32) - Distance to nearest obstacle in meters (inflation-adjusted)
+- `/obstacle_distance` (std_msgs/msg/Float32) - Distance to nearest obstacle in meters
+- `/avoidance_command` (std_msgs/msg/String) - Zone command (EMERGENCY_HOVER / HARD_AVOID / REROUTE / ADJUST_HEADING / NORMAL_FLIGHT)
+- `/obstacle_velocity` (geometry_msgs/msg/Vector3Stamped) - Kalman-estimated obstacle velocity
+
+**Published by costmap_node:**
+- `/costmap/grid` (nav_msgs/msg/OccupancyGrid) - 2D costmap for A* planning
+
+**Published by astar_planner:**
+- `/planned_path` (nav_msgs/msg/Path) - A*-generated global path (replaces RRT* path)
+- `/astar_planner/status` (std_msgs/msg/String) - JSON planner status
 
 ##  Testing in Simulation
 
@@ -240,3 +280,7 @@ The `/obstacle_detected` and `/obstacle_distance` topics can be consumed by:
 ##  Acknowledgments
 
 Built following PX4 + ROS 2 best practices for simulation-to-real continuity.
+
+A\* pathfinding algorithm sourced from
+[Pegasus-Disaster-Response/Ros-workspace](https://github.com/Pegasus-Disaster-Response/Ros-workspace)
+(commit c752b073, March 4 2026) by Team Pegasus — Cal Poly Pomona.
