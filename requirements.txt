@@ -2,7 +2,13 @@
 # Install with: pip install -r requirements.txt
 
 # Core numerics
-numpy>=1.21.0
+numpy>=1.24.0
+
+# Scientific computing (used by A* and integrated planning)
+scipy>=1.10.0
+
+# Kalman filtering (existing obstacle tracker)
+filterpy>=1.4.5
 
 # Optional: accelerated DBSCAN clustering (falls back to built-in if unavailable)
 # scikit-learn>=1.0.0

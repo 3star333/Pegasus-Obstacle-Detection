@@ -5,22 +5,22 @@ Full Pegasus Obstacle Avoidance Stack Launch File
 Starts all three nodes together:
   1. obstacle_detector  — LiDAR + Kalman tracking + zone classification
   2. costmap_node       — OccupancyGrid from tracked obstacles
-  3. rrt_star_planner   — RRT* path planner driven by avoidance commands
+  3. astar_planner      — A* path planner driven by costmap + avoidance commands
 
 Usage:
     ros2 launch costmap full_stack.launch.py
     ros2 launch costmap full_stack.launch.py use_sim_time:=false
 
 Topic graph:
-    /lidar/points          → obstacle_detector → /avoidance_command   → rrt_star_planner
-                                               → /obstacle_velocity   → rrt_star_planner
-                                               → /obstacle_detected
-                                               → /obstacle_distance
+    /lidar/points          → obstacle_detector → /avoidance_command   → astar_planner
+                                               → /obstacle_velocity   → astar_planner
+                                               → /obstacle_detected   → astar_planner
+                                               → /obstacle_distance   → astar_planner
                                                → /costmap/update_trigger → costmap_node
-    /lidar/points          → costmap_node      → /costmap/grid        → rrt_star_planner
-    /vehicle/pose          → rrt_star_planner
+    /lidar/points          → costmap_node      → /costmap/grid        → astar_planner
+    /vehicle/pose          → astar_planner
     /vehicle/pose          → costmap_node
-    /planning/goal         → rrt_star_planner  → /planning/path
+    /planning/goal         → astar_planner     → /planned_path
 """
 
 from launch import LaunchDescription
@@ -70,15 +70,15 @@ def generate_launch_description():
         emulate_tty=True,
     )
 
-    # ── RRT* Planner ──────────────────────────────────────────────────
-    rrt_star_node = Node(
-        package='rrt_star_planner',
-        executable='rrt_star_planner',
-        name='rrt_star_planner',
+    # ── A* Planner ───────────────────────────────────────────────────
+    astar_node = Node(
+        package='astar_planner',
+        executable='astar_node',
+        name='astar_planner',
         output='screen',
         parameters=[
             PathJoinSubstitution([
-                FindPackageShare('rrt_star_planner'), 'config', 'rrt_star_params.yaml'
+                FindPackageShare('astar_planner'), 'config', 'astar_params.yaml'
             ]),
             {'use_sim_time': sim_time},
         ],
@@ -89,5 +89,5 @@ def generate_launch_description():
         use_sim_time_arg,
         obstacle_detector_node,
         costmap_node,
-        rrt_star_node,
+        astar_node,
     ])
